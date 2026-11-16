@@ -1,0 +1,12 @@
+##
+# Infinix Note 12 G96 (X670) platform package.
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+[Defines]
+  DEC_SPECIFICATION              = 0x00010005
+  PACKAGE_NAME                   = x670Pkg
+  PACKAGE_GUID                   = 9677F3C8-973F-44C7-BD1D-9C315BC5EDAF
+  PACKAGE_VERSION                = 0.1
+
+[Includes]
+  Include
