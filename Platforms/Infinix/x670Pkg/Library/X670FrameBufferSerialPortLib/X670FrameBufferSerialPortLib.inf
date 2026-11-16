@@ -1,0 +1,29 @@
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = X670FrameBufferSerialPortLib
+  FILE_GUID                      = 2D6D5782-A254-482E-B25E-DAE55DF46DF3
+  MODULE_TYPE                    = BASE
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = SerialPortLib
+
+[Sources]
+  X670FrameBufferSerialPortLib.c
+
+[Packages]
+  ArmPkg/ArmPkg.dec
+  MdePkg/MdePkg.dec
+  SiliciumPkg/SiliciumPkg.dec
+
+[LibraryClasses]
+  ArmLib
+  BaseMemoryLib
+  CacheMaintenanceLib
+  IoLib
+  MemoryMapHelperLib
+  SerialPortLib
+
+[FixedPcd]
+  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferWidth
+  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferHeight
+  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferColorDepth
+  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferDelay

@@ -6,6 +6,17 @@
 
 This Project focuses on Making ARM-Based Devices Boot Operating Systems like Windows or Linux using Custom UEFI Firmware.
 
+## Infinix Note 12 G96 (X670)
+
+This fork adds an experimental Mu-Silicium port for the MediaTek MT6781 X670.
+The port is in early bring-up: its build target, stock DTB, framebuffer refresh,
+and button mapping are being integrated. It has not yet been validated by
+booting a Mu-Silicium image on the phone. See
+[`Platforms/Infinix/x670Pkg/README.md`](Platforms/Infinix/x670Pkg/README.md)
+for the X670 build instructions and current hardware notes.
+The fork's **Actions** tab can build the DEBUG Android boot image remotely;
+the image and SHA-256 checksum are published as workflow artifacts.
+
 ## Resources
 
 - [Status](Status.md)

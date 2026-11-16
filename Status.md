@@ -669,6 +669,24 @@
 
 <br>
 
+## Infinix Note 12 G96
+
+**State:** Inactive <br>
+**Codename:** x670 <br>
+**SoC:** MediaTek MT6781
+
+### UEFI Status
+
+| Feature          | Description                          | State |
+|:-----------------|:-------------------------------------|:-----:|
+| Display          | X670 Mu port not yet tested on device | ❔    |
+| Internal Storage | MT6781 storage driver not implemented | ❌    |
+| Side Buttons     | Mapped; physical UEFI input untested  | ❔    |
+| USB Host Mode    | Not implemented                       | ❌    |
+| USB Device Mode  | Not implemented                       | ❌    |
+| Windows Boot     | Not tested                            | ❌    |
+| Linux Boot       | Not tested                            | ❌    |
+
 <details>
 <summary><b><strong>MediaTek G99 Devices</strong></b></summary>
 

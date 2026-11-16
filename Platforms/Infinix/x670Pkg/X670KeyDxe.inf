@@ -1,0 +1,25 @@
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = X670KeyDxe
+  FILE_GUID                      = 66D39554-579A-4206-8B6F-D4D7B03073CC
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = X670KeyDxeEntryPoint
+
+[Sources]
+  X670KeyDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  DebugLib
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint
+  IoLib
+
+[Protocols]
+  gEfiSimpleTextInProtocolGuid
+
+[Depex]
+  TRUE

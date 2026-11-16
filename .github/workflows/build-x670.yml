@@ -1,0 +1,57 @@
+name: Build Mu-Silicium for X670
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-x670.yml'
+      - 'Platforms/Infinix/**'
+      - 'Resources/Configs/x670.toml'
+      - 'Resources/DTBs/x670.dtb'
+      - 'Status.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x670-uefi-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI_BUILD: true
+
+jobs:
+  build-x670:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Initialize X670 build dependencies
+        run: >-
+          git submodule update --init --recursive
+          Common/Mu Common/Mu_OEM_Sample Mu_Basecore
+          Silicon/Silicium/OpensslPkg/Library/OpensslLib/openssl
+
+      - name: Install build dependencies
+        run: bash ./setup_env.sh -p apt
+
+      - name: Build DEBUG firmware and Android boot image
+        run: python3 build_uefi.py -d x670 -r DEBUG
+
+      - name: Write image checksum
+        run: sha256sum Mu-x670.img > Mu-x670.img.sha256
+
+      - name: Upload X670 image
+        uses: actions/upload-artifact@v7
+        with:
+          name: Mu-x670-${{ github.sha }}
+          path: |
+            Mu-x670.img
+            Mu-x670.img.sha256
+          if-no-files-found: error
+          compression-level: 0
