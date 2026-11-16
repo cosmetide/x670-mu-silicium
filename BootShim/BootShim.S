@@ -31,7 +31,56 @@ _CopyLoop:
   ldr   x5, =FD_BASE
 
 _Entry:
+  // Take over LK's inherited command-mode display before entering SEC. This
+  // cyan strip is an unmistakable handoff marker; Mu's SEC logger replaces
+  // it with live firmware messages as soon as the FD starts.
+  bl    _X670DisplayHandoff
   br    x5
+
+_X670DisplayHandoff:
+  // Fill the first 48 framebuffer rows (1088 pixels per row including pad).
+  ldr   x6, =0x76c10000
+  mov   w7, #0xffff
+  movk  w7, #0xff00, lsl #16
+  mov   x8, #(1088 * 48)
+_X670Fill:
+  str   w7, [x6], #4
+  subs  x8, x8, #1
+  b.ne  _X670Fill
+
+  // Write back the changed framebuffer before asking DSI to refresh it.
+  ldr   x9, =0x76c10000
+  ldr   x10, =((1088 * 48 * 4) / 64)
+_X670Clean:
+  dc    cvac, x9
+  add   x9, x9, #64
+  subs  x10, x10, #1
+  b.ne  _X670Clean
+  dsb   sy
+
+  // Same command-mode refresh sequence as the proven X670 U-Boot console.
+  ldr   x9, =0x14001000
+  mov   w10, #1
+  str   w10, [x9, #0x20]
+  ldr   x9, =0x14000000
+  mov   w10, #0x14
+  str   w10, [x9, #0xf0]
+  ldr   x9, =0x14013000
+  ldr   w10, =0x002c3909
+  str   w10, [x9, #0x200]
+  mov   w10, #1
+  str   w10, [x9, #0x60]
+  dsb   sy
+  str   wzr, [x9]
+  mov   w10, #1
+  str   w10, [x9]
+  dsb   sy
+  // Leave a short visible window before SEC replaces the marker with logs.
+  mov   x11, #0x100000
+_X670DisplayDelay:
+  subs  x11, x11, #1
+  b.ne  _X670DisplayDelay
+  ret
 
 _Dead:
   b     _Dead

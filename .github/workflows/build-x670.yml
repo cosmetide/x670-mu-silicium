@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/build-x670.yml'
+      - 'BootShim/**'
       - 'Platforms/Infinix/**'
       - 'Resources/Configs/x670.toml'
       - 'Resources/DTBs/x670.dtb'
