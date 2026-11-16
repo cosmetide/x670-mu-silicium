@@ -13,7 +13,9 @@ map, not a complete Android memory map.
 Button map is taken from the existing X670 U-Boot board code and the previous
 X670 EDK II input driver: volume up is keypad bit 0 (EFI Up), volume down is
 bit 1 (EFI Down), and power is bit 8 (Enter/select). The keypad controller is
-at `0x10010000`; `MEM1` is active-low.
+at `0x10010000`; `MEM1` is active-low. The driver exposes both UEFI text input
+protocols, including `SimpleTextInputEx`, so Mu's boot manager and menu dialogs
+can receive those keys through the normal console input path.
 
 This platform deliberately starts with the standard Mu-Silicium UEFI core,
 simple framebuffer GOP, and an X670-specific logger and key driver. MT6789

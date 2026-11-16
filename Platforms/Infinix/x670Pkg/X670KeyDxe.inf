@@ -11,8 +11,10 @@
 
 [Packages]
   MdePkg/MdePkg.dec
+  SiliciumPkg/SiliciumPkg.dec
 
 [LibraryClasses]
+  BaseMemoryLib
   DebugLib
   UefiBootServicesTableLib
   UefiDriverEntryPoint
@@ -20,6 +22,8 @@
 
 [Protocols]
   gEfiSimpleTextInProtocolGuid
+  gEfiSimpleTextInputExProtocolGuid
+  gEfiDevicePathProtocolGuid
 
 [Depex]
   TRUE
