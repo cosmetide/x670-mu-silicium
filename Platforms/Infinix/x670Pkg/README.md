@@ -22,6 +22,11 @@ simple framebuffer GOP, and an X670-specific logger and key driver. MT6789
 GPIO, PMIC, clock, and storage implementation drivers are not enabled here;
 MT6781 register compatibility for those drivers has not been established.
 
+The BootShim's first display probe follows the XNU shim: it clears the full
+inherited framebuffer red, waits for the command-mode DSI queue, kicks a frame,
+and leaves the red frame briefly before entering SEC. SEC log and GOP updates
+also wait for DSI idle before queueing the next frame.
+
 ## Build with a smaller checkout
 
 The X670 target does not use the all-device `Binaries` submodule or

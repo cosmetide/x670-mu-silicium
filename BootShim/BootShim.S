@@ -17,6 +17,24 @@ _StackSize:
 #endif
 
 _Start:
+  // Mirror the XNU shim's minimal entry setup before doing framebuffer I/O.
+  // Keep LK's DTB in x0 untouched for the firmware handoff.
+  msr   daifset, #0xf
+  msr   spsel, #1
+  isb
+  ldr   x9, =0x40040000
+  mov   sp, x9
+
+  // Stop the MTK watchdog before a full-frame clear and DSI refresh.
+  ldr   x9, =0x10007000
+  ldr   w10, [x9]
+  bic   w10, w10, #1
+  and   w10, w10, #0x00ffffff
+  mov   w11, #0
+  movk  w11, #0x2200, lsl #16
+  orr   w10, w10, w11
+  str   w10, [x9]
+
   mov   x4, x1
   ldr   x5, =FD_BASE
   cmp   x4, x5
@@ -38,19 +56,24 @@ _Entry:
   br    x5
 
 _X670DisplayHandoff:
-  // Fill the first 48 framebuffer rows (1088 pixels per row including pad).
+  // Match XNU's first visible takeover: clear the complete inherited panel red.
   ldr   x6, =0x76c10000
-  mov   w7, #0xffff
-  movk  w7, #0xff00, lsl #16
-  mov   x8, #(1088 * 48)
-_X670Fill:
+  mov   w7, #0
+  movk  w7, #0xffff, lsl #16
+  mov   x8, #2400
+_X670RedRow:
+  mov   x9, #1080
+_X670RedPixel:
   str   w7, [x6], #4
+  subs  x9, x9, #1
+  b.ne  _X670RedPixel
+  add   x6, x6, #32
   subs  x8, x8, #1
-  b.ne  _X670Fill
+  b.ne  _X670RedRow
 
   // Write back the changed framebuffer before asking DSI to refresh it.
   ldr   x9, =0x76c10000
-  ldr   x10, =((1088 * 48 * 4) / 64)
+  ldr   x10, =163200
 _X670Clean:
   dc    cvac, x9
   add   x9, x9, #64
@@ -59,14 +82,19 @@ _X670Clean:
   dsb   sy
 
   // The previous LK splash may still own the command queue. Match XNU's
-  // bounded busy wait before programming another command-mode transfer.
+  // timer-based 100 ms wait before programming another transfer.
+  mrs   x12, cntpct_el0
+  mrs   x13, cntfrq_el0
+  mov   x14, #10
+  udiv  x13, x13, x14
+  add   x13, x13, x12
   ldr   x9, =0x1401300c
-  mov   x10, #0x100000
 _X670WaitDsi:
   ldr   w11, [x9]
   tbz   w11, #31, _X670DsiReady
-  subs  x10, x10, #1
-  b.ne  _X670WaitDsi
+  mrs   x12, cntpct_el0
+  cmp   x12, x13
+  b.lo  _X670WaitDsi
 _X670DsiReady:
   // Same command-mode refresh sequence as the proven X670 U-Boot console.
   ldr   x9, =0x14001000
@@ -85,11 +113,16 @@ _X670DsiReady:
   mov   w10, #1
   str   w10, [x9]
   dsb   sy
-  // Leave a short visible window before SEC replaces the marker with logs.
-  mov   x11, #0x100000
+  // Hold the red frame briefly before SEC replaces it with live Mu logs.
+  mrs   x12, cntpct_el0
+  mrs   x13, cntfrq_el0
+  mov   x14, #4
+  udiv  x13, x13, x14
+  add   x13, x13, x12
 _X670DisplayDelay:
-  subs  x11, x11, #1
-  b.ne  _X670DisplayDelay
+  mrs   x12, cntpct_el0
+  cmp   x12, x13
+  b.lo  _X670DisplayDelay
   ret
 
 _Dead:

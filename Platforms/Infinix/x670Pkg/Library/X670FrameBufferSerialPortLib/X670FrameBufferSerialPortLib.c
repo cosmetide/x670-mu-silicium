@@ -17,11 +17,43 @@ STATIC EFI_FRAME_BUFFER_POSITION mCurrentPosition;
 STATIC BOOLEAN mFirstWrite = TRUE;
 
 STATIC
+UINT64
+ReadX670Counter (
+  VOID
+  )
+{
+  UINT64 Counter;
+  __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (Counter));
+  return Counter;
+}
+
+STATIC
+UINT64
+ReadX670CounterFrequency (
+  VOID
+  )
+{
+  UINT64 Frequency;
+  __asm__ volatile ("mrs %0, cntfrq_el0" : "=r" (Frequency));
+  return Frequency;
+}
+
+STATIC
 VOID
 RefreshX670Panel (
   VOID
   )
 {
+  UINT64 Start     = ReadX670Counter ();
+  UINT64 Frequency = ReadX670CounterFrequency ();
+
+  // Follow XNU's 100 ms bound before reusing the command-mode DSI queue.
+  while ((MmioRead32 (X670_DSI + 0x00c) & BIT31) != 0) {
+    if ((ReadX670Counter () - Start) > (Frequency / 10)) {
+      return;
+    }
+  }
+
   MmioWrite32 (X670_DISP_MUTEX + 0x020, 1);
   MmioWrite32 (X670_DISP_CFG + 0x0f0, 0x14);
   MmioWrite32 (X670_DSI + 0x200, 0x002c3909);
