@@ -17,7 +17,6 @@ _StackSize:
 #endif
 
 _Start:
-  adr   x1, _Payload    /* FD payload follows the shim in the boot kernel */
   // Mirror the XNU shim's minimal entry setup before doing framebuffer I/O.
   // Keep LK's DTB in x0 untouched for the firmware handoff.
   msr   daifset, #0xf
@@ -36,6 +35,11 @@ _Start:
   orr   w10, w10, w11
   str   w10, [x9]
 
+  // The boot image is loaded at FD_BASE. Copying the appended FD there
+  // overwrites this shim, so take over the panel before starting that copy.
+  bl    _X670DisplayHandoff
+
+  adr   x1, _Payload    /* FD payload follows the shim in the boot kernel */
   mov   x4, x1
   ldr   x5, =FD_BASE
   cmp   x4, x5
@@ -50,10 +54,6 @@ _CopyLoop:
   ldr   x5, =FD_BASE
 
 _Entry:
-  // Take over LK's inherited command-mode display before entering SEC. This
-  // cyan strip is an unmistakable handoff marker; Mu's SEC logger replaces
-  // it with live firmware messages as soon as the FD starts.
-  bl    _X670DisplayHandoff
   br    x5
 
 _X670DisplayHandoff:
