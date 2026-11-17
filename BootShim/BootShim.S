@@ -4,10 +4,10 @@ _Head:
 
 #if REQUIRES_KERNEL_HEADER == 1
 _StackBase:
-  .quad FD_BASE         /* Text Offset */
+  .quad IMAGE_TEXT_OFFSET /* Text Offset from a 2 MiB-aligned DRAM base */
 
 _StackSize:
-  .quad FD_SIZE         /* Image Size */
+  .quad IMAGE_SIZE       /* Image size, including the shim and appended FD */
   .quad 0               /* Flags */
   .quad 0               /* Reserved */
   .quad 0               /* Reserved */
@@ -58,6 +58,16 @@ _X670Clean:
   b.ne  _X670Clean
   dsb   sy
 
+  // The previous LK splash may still own the command queue. Match XNU's
+  // bounded busy wait before programming another command-mode transfer.
+  ldr   x9, =0x1401300c
+  mov   x10, #0x100000
+_X670WaitDsi:
+  ldr   w11, [x9]
+  tbz   w11, #31, _X670DsiReady
+  subs  x10, x10, #1
+  b.ne  _X670WaitDsi
+_X670DsiReady:
   // Same command-mode refresh sequence as the proven X670 U-Boot console.
   ldr   x9, =0x14001000
   mov   w10, #1

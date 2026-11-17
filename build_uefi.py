@@ -185,6 +185,12 @@ def compile_boot_shim (boot_shim_config: dict, fd_config: dict) -> bool:
     fd_base = hex (fd_config.get ("base"))
     fd_size = hex (fd_config.get ("size"))
 
+    # The ARM64 Image header uses a load offset relative to a 2 MiB aligned
+    # DRAM base, not the physical FD address. Keep existing targets' values
+    # unless they provide an explicit per-device header layout.
+    image_text_offset = hex (boot_shim_config.get ("text_offset", fd_config.get ("base")))
+    image_size = hex (boot_shim_config.get ("image_size", fd_config.get ("size")))
+
     # Get Kernel Header Flag
     requires_kernel_header = boot_shim_config.get ("requires_kernel_header", False)
 
@@ -193,7 +199,9 @@ def compile_boot_shim (boot_shim_config: dict, fd_config: dict) -> bool:
         "make",
         f"REQUIRES_KERNEL_HEADER={int (requires_kernel_header)}",
         f"FD_BASE={fd_base}",
-        f"FD_SIZE={fd_size}"
+        f"FD_SIZE={fd_size}",
+        f"IMAGE_TEXT_OFFSET={image_text_offset}",
+        f"IMAGE_SIZE={image_size}"
     ]
 
     # Compile Boot Shim
