@@ -252,6 +252,9 @@ _WaitDsi:
   mrs   x12, cntpct_el0
   cmp   x12, x13
   b.lo  _WaitDsi
+  // Match XNU's console: if the command queue stays busy for 100 ms, skip
+  // this refresh instead of reusing a queue the panel still owns.
+  ret
 _DsiReady:
   ldr   x9, =0x14001000
   mov   w10, #1
