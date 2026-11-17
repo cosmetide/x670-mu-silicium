@@ -87,14 +87,44 @@ _TrampolineStart:
 // This routine is copied verbatim to RAM below FD_BASE. All branches are
 // PC-relative and all input addresses/sizes are passed in registers.
 _CopyAndEnter:
+  // Keep a screen-visible heartbeat while the two MiB FD is copied. The
+  // trampoline is outside both the source and destination ranges, so refreshing
+  // the display cannot overwrite code or payload bytes.
+  mov   x15, #0x180000
 _CopyLoop:
   ldr   w2, [x4], #4
   ldr   w3, [x4], #4
   str   w2, [x5], #4
   str   w3, [x5], #4
   subs  x6, x6, #8
+  b.eq  _CopyFinished
+  cmp   x6, x15
   b.ne  _CopyLoop
 
+  // Preserve the live copy pointers/count across the logger's caller-saved
+  // registers, then render one of three milestones at the same screen row.
+  stp   x4, x5, [sp, #-32]!
+  stp   x6, x15, [sp, #16]
+  cmp   x15, #0x180000
+  b.ne  _CopyMilestoneTwo
+  adr   x0, _TextCopyPhaseOne
+  b     _CopyMilestoneLog
+_CopyMilestoneTwo:
+  cmp   x15, #0x100000
+  b.ne  _CopyMilestoneThree
+  adr   x0, _TextCopyPhaseTwo
+  b     _CopyMilestoneLog
+_CopyMilestoneThree:
+  adr   x0, _TextCopyPhaseEnd
+_CopyMilestoneLog:
+  mov   x1, #96
+  bl    _X670Log
+  ldp   x6, x15, [sp, #16]
+  ldp   x4, x5, [sp], #32
+  sub   x15, x15, #0x80000
+  b     _CopyLoop
+
+_CopyFinished:
   // The original shim is overwritten now; these logs/font moved with us.
   mov   x16, x8
   adr   x0, _TextCopyDone
@@ -238,6 +268,12 @@ _TextCopyDone:
   .asciz "FD COPY DONE"
 _TextSecEntry:
   .asciz "SEC ENTRY"
+_TextCopyPhaseOne:
+  .asciz "COPY PHASE ONE"
+_TextCopyPhaseTwo:
+  .asciz "COPY PHASE TWO"
+_TextCopyPhaseEnd:
+  .asciz "COPY PHASE END"
 
 .align 4
 _X670Font5x7:
