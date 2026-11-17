@@ -52,9 +52,15 @@ _CopyStub:
   b.ne  _CopyStub
 
   // The copied routine must be visible to instruction fetch before we jump
-  // into the scratch page. Its 64-byte body starts on a 4 KiB boundary.
+  // into the scratch page. Clean addresses covering its 72-byte body.
   ldr   x9, =(FD_BASE - 0x1000)
   dc    cvac, x9
+  add   x11, x9, #32
+  dc    cvac, x11
+  add   x11, x9, #64
+  dc    cvac, x11
+  add   x11, x9, #96
+  dc    cvac, x11
   dsb   sy
   ic    iallu
   dsb   sy
@@ -72,9 +78,11 @@ _CopyStub:
 // PC-relative and all input addresses/sizes are passed in registers.
 _CopyAndEnter:
 _CopyLoop:
-  ldp   x2, x3, [x4], #16
-  stp   x2, x3, [x5], #16
-  subs  x6, x6, #16
+  ldr   w2, [x4], #4
+  ldr   w3, [x4], #4
+  str   w2, [x5], #4
+  str   w3, [x5], #4
+  subs  x6, x6, #8
   b.ne  _CopyLoop
 
   // Publish the copied XIP SEC image before entering it.
