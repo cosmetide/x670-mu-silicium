@@ -190,6 +190,7 @@ def compile_boot_shim (boot_shim_config: dict, fd_config: dict) -> bool:
     # unless they provide an explicit per-device header layout.
     image_text_offset = hex (boot_shim_config.get ("text_offset", fd_config.get ("base")))
     image_size = hex (boot_shim_config.get ("image_size", fd_config.get ("size")))
+    image_flags = hex (boot_shim_config.get ("flags", 0))
 
     # Get Kernel Header Flag
     requires_kernel_header = boot_shim_config.get ("requires_kernel_header", False)
@@ -201,7 +202,8 @@ def compile_boot_shim (boot_shim_config: dict, fd_config: dict) -> bool:
         f"FD_BASE={fd_base}",
         f"FD_SIZE={fd_size}",
         f"IMAGE_TEXT_OFFSET={image_text_offset}",
-        f"IMAGE_SIZE={image_size}"
+        f"IMAGE_SIZE={image_size}",
+        f"IMAGE_FLAGS={image_flags}"
     ]
 
     # Compile Boot Shim

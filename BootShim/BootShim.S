@@ -1,6 +1,6 @@
 _Head:
-  adr   x1, _Payload    /* Set _Entry address */
-  b     _Start          /* Jump to the real code */
+  b     _Start          /* Match the stock/XNU Image entry stub */
+  .long 0               /* Reserved code1 word */
 
 #if REQUIRES_KERNEL_HEADER == 1
 _StackBase:
@@ -8,7 +8,7 @@ _StackBase:
 
 _StackSize:
   .quad IMAGE_SIZE       /* Image size, including the shim and appended FD */
-  .quad 0               /* Flags */
+  .quad IMAGE_FLAGS      /* Match the stock ARM64 header flags */
   .quad 0               /* Reserved */
   .quad 0               /* Reserved */
   .quad 0               /* Reserved */
@@ -17,6 +17,7 @@ _StackSize:
 #endif
 
 _Start:
+  adr   x1, _Payload    /* FD payload follows the shim in the boot kernel */
   // Mirror the XNU shim's minimal entry setup before doing framebuffer I/O.
   // Keep LK's DTB in x0 untouched for the firmware handoff.
   msr   daifset, #0xf
