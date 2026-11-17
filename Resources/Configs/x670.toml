@@ -6,7 +6,7 @@ size = 0x200000
 [boot_shim]
 requires_kernel_header = true
 text_offset = 0x80000
-image_size = 0x201000
+image_size = 0x202000
 flags = 0xa
 
 [boot_image_kernel]

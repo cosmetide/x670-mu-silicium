@@ -66,6 +66,13 @@ _CleanTrampoline:
   dsb   sy
   isb
 
+  // Route early synchronous faults to the diagnostic trampoline. The vector
+  // table is placed at the aligned second half of the reserved scratch page.
+  ldr   x9, =(FD_BASE - 0x1000)
+  add   x9, x9, #0x800
+  msr   vbar_el1, x9
+  isb
+
   // Visible progress labels over the red XNU takeover frame.
   adr   x0, _TextShimReady
   mov   x1, #32
@@ -100,10 +107,13 @@ _CopyAndEnter:
   ldp   x4, x5, [sp], #48
   // Probe the first source read and destination write independently of the
   // longer copy loop and its quarter-way progress checkpoints.
+  mov   x16, #1
   ldr   w2, [x4], #4
   ldr   w3, [x4], #4
+  mov   x16, #2
   str   w2, [x5], #4
   str   w3, [x5], #4
+  mov   x16, #3
   subs  x6, x6, #8
   stp   x4, x5, [sp, #-48]!
   stp   x6, x8, [sp, #16]
@@ -119,6 +129,7 @@ _CopyAndEnter:
   // the display cannot overwrite code or payload bytes.
   mov   x15, #0x180000
 _CopyLoop:
+  mov   x16, #4
   ldr   w2, [x4], #4
   ldr   w3, [x4], #4
   str   w2, [x5], #4
@@ -174,7 +185,30 @@ _CleanFd:
   ic    iallu
   dsb   sy
   isb
+  mov   x0, x19
   br    x17
+
+// A synchronous exception while reading or writing the appended FD is
+// reported in place. x16 identifies whether the source or destination faulted.
+_CopyException:
+  msr   daifset, #0xf
+  cmp   x16, #1
+  b.eq  _CopyReadFault
+  cmp   x16, #2
+  b.eq  _CopyWriteFault
+  adr   x0, _TextCopyException
+  b     _CopyExceptionLog
+_CopyReadFault:
+  adr   x0, _TextCopyReadFault
+  b     _CopyExceptionLog
+_CopyWriteFault:
+  adr   x0, _TextCopyWriteFault
+_CopyExceptionLog:
+  mov   x1, #160
+  bl    _X670Log
+_CopyExceptionHang:
+  wfe
+  b     _CopyExceptionHang
 
 // Draw a white 5x7 uppercase log line on the inherited 1080x2400 panel.
 // x0 = NUL-terminated text, x1 = top pixel row. This routine and its font,
@@ -305,6 +339,12 @@ _TextCopyPhaseTwo:
   .asciz "COPY PHASE TWO"
 _TextCopyPhaseEnd:
   .asciz "COPY PHASE END"
+_TextCopyException:
+  .asciz "COPY EXCEPTION"
+_TextCopyReadFault:
+  .asciz "COPY READ FAULT"
+_TextCopyWriteFault:
+  .asciz "COPY WRITE FAULT"
 
 .align 4
 _X670Font5x7:
@@ -335,6 +375,15 @@ _X670Font5x7:
   .byte 17,17,10,4,4,4,4 // Y
   .byte 31,1,2,4,8,16,31 // Z
   .ltorg
+
+// VBAR_EL1 requires a 2 KiB-aligned table. The code/data above fits before
+// this fixed offset; the 16 vectors consume the rest of the reserved page.
+.org _TrampolineStart + 0x800, 0
+_CopyVectorTable:
+.rept 16
+  b     _CopyException
+  .space 124, 0
+.endr
 _TrampolineEnd:
 
 _X670DisplayHandoff:
