@@ -94,8 +94,8 @@ _TrampolineStart:
 // This routine is copied verbatim to RAM below FD_BASE. All branches are
 // PC-relative and all input addresses/sizes are passed in registers.
 _CopyAndEnter:
-  // Distinguish a failed jump into the relocated scratch trampoline from a
-  // fault in the FD reads/writes themselves.
+  // This is the only refresh inside the transfer path. Avoid repeated DSI
+  // updates while copying so the panel queue cannot interrupt the FD move.
   stp   x4, x5, [sp, #-48]!
   stp   x6, x8, [sp, #16]
   str   x17, [sp, #32]
@@ -105,8 +105,9 @@ _CopyAndEnter:
   ldr   x17, [sp, #32]
   ldp   x6, x8, [sp, #16]
   ldp   x4, x5, [sp], #48
-  // Probe the first source read and destination write independently of the
-  // longer copy loop and its quarter-way progress checkpoints.
+  // Copy the FD directly. Exception stage markers separate source reads,
+  // destination writes, and the remaining transfer without DSI refreshes.
+_CopyLoop:
   mov   x16, #1
   ldr   w2, [x4], #4
   ldr   w3, [x4], #4
@@ -115,61 +116,14 @@ _CopyAndEnter:
   str   w3, [x5], #4
   mov   x16, #3
   subs  x6, x6, #8
-  stp   x4, x5, [sp, #-48]!
-  stp   x6, x8, [sp, #16]
-  str   x17, [sp, #32]
-  adr   x0, _TextFirstWrite
-  mov   x1, #96
-  bl    _X670Log
-  ldr   x17, [sp, #32]
-  ldp   x6, x8, [sp, #16]
-  ldp   x4, x5, [sp], #48
-  // Keep a screen-visible heartbeat while the two MiB FD is copied. The
-  // trampoline is outside both the source and destination ranges, so refreshing
-  // the display cannot overwrite code or payload bytes.
-  mov   x15, #0x180000
-_CopyLoop:
-  mov   x16, #4
-  ldr   w2, [x4], #4
-  ldr   w3, [x4], #4
-  str   w2, [x5], #4
-  str   w3, [x5], #4
-  subs  x6, x6, #8
   b.eq  _CopyFinished
-  cmp   x6, x15
-  b.ne  _CopyLoop
-
-  // Preserve the live copy pointers/count across the logger's caller-saved
-  // registers, then render one of three milestones at the same screen row.
-  stp   x4, x5, [sp, #-32]!
-  stp   x6, x15, [sp, #16]
-  cmp   x15, #0x180000
-  b.ne  _CopyMilestoneTwo
-  adr   x0, _TextCopyPhaseOne
-  b     _CopyMilestoneLog
-_CopyMilestoneTwo:
-  cmp   x15, #0x100000
-  b.ne  _CopyMilestoneThree
-  adr   x0, _TextCopyPhaseTwo
-  b     _CopyMilestoneLog
-_CopyMilestoneThree:
-  adr   x0, _TextCopyPhaseEnd
-_CopyMilestoneLog:
-  mov   x1, #96
-  bl    _X670Log
-  ldp   x6, x15, [sp, #16]
-  ldp   x4, x5, [sp], #32
-  sub   x15, x15, #0x80000
   b     _CopyLoop
 
 _CopyFinished:
-  // The original shim is overwritten now; these logs/font moved with us.
+  // One post-copy refresh, then hand off directly to the SEC entry point.
   mov   x16, x8
   adr   x0, _TextCopyDone
   mov   x1, #96
-  bl    _X670Log
-  adr   x0, _TextSecEntry
-  mov   x1, #128
   bl    _X670Log
 
   // Publish the copied XIP SEC image before entering it.
@@ -196,7 +150,7 @@ _CopyException:
   b.eq  _CopyReadFault
   cmp   x16, #2
   b.eq  _CopyWriteFault
-  adr   x0, _TextCopyException
+  adr   x0, _TextCopyLoopFault
   b     _CopyExceptionLog
 _CopyReadFault:
   adr   x0, _TextCopyReadFault
@@ -331,16 +285,8 @@ _TextSecEntry:
   .asciz "SEC ENTRY"
 _TextCopyLoopEntry:
   .asciz "COPY LOOP ENTRY"
-_TextFirstWrite:
-  .asciz "COPY FIRST WRITE"
-_TextCopyPhaseOne:
-  .asciz "COPY PHASE ONE"
-_TextCopyPhaseTwo:
-  .asciz "COPY PHASE TWO"
-_TextCopyPhaseEnd:
-  .asciz "COPY PHASE END"
-_TextCopyException:
-  .asciz "COPY EXCEPTION"
+_TextCopyLoopFault:
+  .asciz "COPY LOOP FAULT"
 _TextCopyReadFault:
   .asciz "COPY READ FAULT"
 _TextCopyWriteFault:
