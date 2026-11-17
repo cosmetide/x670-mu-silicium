@@ -98,6 +98,22 @@ _CopyAndEnter:
   ldr   x17, [sp, #32]
   ldp   x6, x8, [sp, #16]
   ldp   x4, x5, [sp], #48
+  // Probe the first source read and destination write independently of the
+  // longer copy loop and its quarter-way progress checkpoints.
+  ldr   w2, [x4], #4
+  ldr   w3, [x4], #4
+  str   w2, [x5], #4
+  str   w3, [x5], #4
+  subs  x6, x6, #8
+  stp   x4, x5, [sp, #-48]!
+  stp   x6, x8, [sp, #16]
+  str   x17, [sp, #32]
+  adr   x0, _TextFirstWrite
+  mov   x1, #96
+  bl    _X670Log
+  ldr   x17, [sp, #32]
+  ldp   x6, x8, [sp, #16]
+  ldp   x4, x5, [sp], #48
   // Keep a screen-visible heartbeat while the two MiB FD is copied. The
   // trampoline is outside both the source and destination ranges, so refreshing
   // the display cannot overwrite code or payload bytes.
@@ -281,6 +297,8 @@ _TextSecEntry:
   .asciz "SEC ENTRY"
 _TextCopyLoopEntry:
   .asciz "COPY LOOP ENTRY"
+_TextFirstWrite:
+  .asciz "COPY FIRST WRITE"
 _TextCopyPhaseOne:
   .asciz "COPY PHASE ONE"
 _TextCopyPhaseTwo:
