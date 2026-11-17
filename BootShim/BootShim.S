@@ -51,6 +51,15 @@ _CopyStub:
   subs  x10, x10, #4
   b.ne  _CopyStub
 
+  // The copied routine must be visible to instruction fetch before we jump
+  // into the scratch page. Its 64-byte body starts on a 4 KiB boundary.
+  ldr   x9, =(FD_BASE - 0x1000)
+  dc    cvac, x9
+  dsb   sy
+  ic    iallu
+  dsb   sy
+  isb
+
   adr   x4, _Payload
   ldr   x5, =FD_BASE
   ldr   x6, =FD_SIZE
