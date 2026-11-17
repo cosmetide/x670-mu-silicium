@@ -87,6 +87,17 @@ _TrampolineStart:
 // This routine is copied verbatim to RAM below FD_BASE. All branches are
 // PC-relative and all input addresses/sizes are passed in registers.
 _CopyAndEnter:
+  // Distinguish a failed jump into the relocated scratch trampoline from a
+  // fault in the FD reads/writes themselves.
+  stp   x4, x5, [sp, #-48]!
+  stp   x6, x8, [sp, #16]
+  str   x17, [sp, #32]
+  adr   x0, _TextCopyLoopEntry
+  mov   x1, #96
+  bl    _X670Log
+  ldr   x17, [sp, #32]
+  ldp   x6, x8, [sp, #16]
+  ldp   x4, x5, [sp], #48
   // Keep a screen-visible heartbeat while the two MiB FD is copied. The
   // trampoline is outside both the source and destination ranges, so refreshing
   // the display cannot overwrite code or payload bytes.
@@ -268,6 +279,8 @@ _TextCopyDone:
   .asciz "FD COPY DONE"
 _TextSecEntry:
   .asciz "SEC ENTRY"
+_TextCopyLoopEntry:
+  .asciz "COPY LOOP ENTRY"
 _TextCopyPhaseOne:
   .asciz "COPY PHASE ONE"
 _TextCopyPhaseTwo:
