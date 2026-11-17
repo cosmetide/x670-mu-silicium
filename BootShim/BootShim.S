@@ -120,12 +120,8 @@ _CopyLoop:
   b     _CopyLoop
 
 _CopyFinished:
-  // One post-copy refresh, then hand off directly to the SEC entry point.
-  mov   x16, x8
-  adr   x0, _TextCopyDone
-  mov   x1, #96
-  bl    _X670Log
-
+  // Do not queue another DSI transfer here. The entry log already proves the
+  // shim owns the panel; let Mu's SEC logger take over after the XIP copy.
   // Publish the copied XIP SEC image before entering it.
   mov   x9, x5
   sub   x9, x9, x16
