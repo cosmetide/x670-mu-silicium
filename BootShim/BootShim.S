@@ -39,22 +39,50 @@ _Start:
   // overwrites this shim, so take over the panel before starting that copy.
   bl    _X670DisplayHandoff
 
-  adr   x1, _Payload    /* FD payload follows the shim in the boot kernel */
-  mov   x4, x1
-  ldr   x5, =FD_BASE
-  cmp   x4, x5
-  beq   _Entry
-  ldr   x6,  =FD_SIZE
+  // Run the FD copy loop from the unused page below FD_BASE. The FD is
+  // loaded immediately after this shim, and the copy destination overlaps
+  // the shim itself, so executing the loop in place is unsafe.
+  adr   x7, _CopyAndEnter
+  ldr   x9, =(FD_BASE - 0x1000)
+  mov   x10, #(_CopyAndEnterEnd - _CopyAndEnter)
+_CopyStub:
+  ldr   w11, [x7], #4
+  str   w11, [x9], #4
+  subs  x10, x10, #4
+  b.ne  _CopyStub
 
+  adr   x4, _Payload
+  ldr   x5, =FD_BASE
+  ldr   x6, =FD_SIZE
+  ldr   x8, =FD_SIZE
+  ldr   x17, =(FD_BASE + SEC_ENTRY_OFFSET)
+  ldr   x9, =(FD_BASE - 0x1000)
+  br    x9
+
+// This routine is copied verbatim to RAM below FD_BASE. All branches are
+// PC-relative and all input addresses/sizes are passed in registers.
+_CopyAndEnter:
 _CopyLoop:
   ldp   x2, x3, [x4], #16
   stp   x2, x3, [x5], #16
   subs  x6, x6, #16
   b.ne  _CopyLoop
-  ldr   x5, =FD_BASE
 
-_Entry:
-  br    x5
+  // Publish the copied XIP SEC image before entering it.
+  mov   x9, x5
+  sub   x9, x9, x8
+  add   x10, x9, x8
+_CleanFd:
+  dc    cvac, x9
+  add   x9, x9, #64
+  cmp   x9, x10
+  b.lo  _CleanFd
+  dsb   sy
+  ic    iallu
+  dsb   sy
+  isb
+  br    x17
+_CopyAndEnterEnd:
 
 _X670DisplayHandoff:
   // Match XNU's first visible takeover: clear the complete inherited panel red.

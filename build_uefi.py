@@ -13,6 +13,8 @@ import coloredlogs
 import argparse
 import logging
 import tomllib
+import struct
+import uuid
 
 #
 # Logger
@@ -180,7 +182,77 @@ def update_local_repo () -> bool:
 
     return True
 
-def compile_boot_shim (boot_shim_config: dict, fd_config: dict) -> bool:
+def get_sec_entry_offset (fd_path: Path, fd_base: int) -> int:
+    """Find the SEC TE image entry and verify that its FV layout is XIP-safe."""
+    data = fd_path.read_bytes ()
+    if len (data) < 56 or data[40:44] != b"_FVH":
+        raise ValueError (f"{fd_path} does not start with an EDK II firmware volume")
+
+    header_size = struct.unpack_from ("<H", data, 48)[0]
+    if header_size < 56 or header_size > len (data):
+        raise ValueError (f"Invalid FV header size {header_size:#x}")
+
+    sec_guid = uuid.UUID ("9affb503-e643-4141-8b90-17e8588b1d35").bytes_le
+    file_offset = header_size
+    while file_offset + 24 <= len (data):
+        if data[file_offset:file_offset + 16] == b"\xff" * 16:
+            break
+
+        file_size = int.from_bytes (data[file_offset + 20:file_offset + 23], "little")
+        file_header_size = 24
+        if file_size == 0xFFFFFF:
+            if file_offset + 32 > len (data):
+                break
+            file_size = struct.unpack_from ("<Q", data, file_offset + 24)[0]
+            file_header_size = 32
+        if file_size < file_header_size or file_offset + file_size > len (data):
+            break
+
+        if data[file_offset:file_offset + 16] == sec_guid:
+            section_offset = file_offset + file_header_size
+            file_end = file_offset + file_size
+            while section_offset + 4 <= file_end:
+                section_size = int.from_bytes (data[section_offset:section_offset + 3], "little")
+                section_type = data[section_offset + 3]
+                section_header_size = 4
+                if section_size == 0xFFFFFF:
+                    if section_offset + 8 > file_end:
+                        break
+                    section_size = struct.unpack_from ("<I", data, section_offset + 4)[0]
+                    section_header_size = 8
+                if section_size < section_header_size or section_offset + section_size > file_end:
+                    break
+
+                if section_type == 0x12:  # EFI_SECTION_TE
+                    te_offset = section_offset + section_header_size
+                    machine, section_count, _, stripped_size = struct.unpack_from ("<HBBH", data, te_offset + 2)
+                    entry_rva = struct.unpack_from ("<I", data, te_offset + 8)[0]
+                    image_base = struct.unpack_from ("<Q", data, te_offset + 16)[0]
+                    if machine != 0xAA64:
+                        raise ValueError (f"SEC TE machine is {machine:#x}, expected AArch64")
+                    if image_base != fd_base:
+                        raise ValueError (f"SEC TE image base {image_base:#x} differs from FD base {fd_base:#x}")
+
+                    section_table = te_offset + 40
+                    for index in range (section_count):
+                        sec_off = section_table + index * 40
+                        virtual_size, virtual_address, raw_size, raw_offset = struct.unpack_from ("<IIII", data, sec_off + 8)
+                        characteristics = struct.unpack_from ("<I", data, sec_off + 36)[0]
+                        file_data_offset = te_offset + raw_offset - (stripped_size - 40)
+                        if virtual_address <= entry_rva < virtual_address + max (virtual_size, raw_size):
+                            if (characteristics & 0x20000000) == 0:
+                                raise ValueError ("SEC entry point is not in an executable TE section")
+                            if file_data_offset + entry_rva - virtual_address != entry_rva:
+                                raise ValueError ("SEC code is not placed at its TE RVA for XIP")
+                            return entry_rva
+
+                section_offset = (section_offset + section_size + 3) & ~3
+
+        file_offset = (file_offset + file_size + 7) & ~7
+
+    raise ValueError ("Could not find the X670 SEC TE image in the firmware volume")
+
+def compile_boot_shim (boot_shim_config: dict, fd_config: dict, sec_entry_offset: int = 0) -> bool:
     # Get FD Details
     fd_base = hex (fd_config.get ("base"))
     fd_size = hex (fd_config.get ("size"))
@@ -201,6 +273,7 @@ def compile_boot_shim (boot_shim_config: dict, fd_config: dict) -> bool:
         f"REQUIRES_KERNEL_HEADER={int (requires_kernel_header)}",
         f"FD_BASE={fd_base}",
         f"FD_SIZE={fd_size}",
+        f"SEC_ENTRY_OFFSET={hex (sec_entry_offset)}",
         f"IMAGE_TEXT_OFFSET={image_text_offset}",
         f"IMAGE_SIZE={image_size}",
         f"IMAGE_FLAGS={image_flags}"
@@ -506,11 +579,6 @@ def main ():
     # Set Boot Shim Compile Flag
     boot_shim_present = "boot_shim" in config_data
 
-    # Compile Boot Shim
-    if boot_shim_present:
-        if not compile_boot_shim (config_data.get ("boot_shim"), config_data.get ("uefi_fd")):
-            sys.exit (1)
-
     # Prepare UEFI Environment
     if not prepare_uefi_environment (device_script_path, ctx.build_mode, ctx.update):
         sys.exit (1)
@@ -524,6 +592,21 @@ def main ():
     # Compile Device UEFI
     if not compile_uefi (ctx, fd_config, device_script_path):
         sys.exit (1)
+
+    # The X670 shim must branch to the SEC entrypoint in the generated FV,
+    # rather than the FV header. Parse it only after the FD has been built.
+    if boot_shim_present:
+        sec_entry_offset = 0
+        if ctx.device == "x670":
+            fd_path = BUILD_PATH / f"{ctx.device}Pkg" / f"{ctx.build_mode}_CLANGPDB" / "FV" / "SILICIUM_UEFI.fd"
+            try:
+                sec_entry_offset = get_sec_entry_offset (fd_path, fd_config["base"])
+                logger.info (f"X670 SEC entrypoint is FD base + {sec_entry_offset:#x}")
+            except (OSError, ValueError, KeyError) as error:
+                logger.error (f"Failed to locate the X670 SEC entrypoint: {error}")
+                sys.exit (1)
+        if not compile_boot_shim (config_data.get ("boot_shim"), fd_config, sec_entry_offset):
+            sys.exit (1)
 
     # Create Output Image
     if not create_output_image (ctx, config_data, boot_shim_present):
